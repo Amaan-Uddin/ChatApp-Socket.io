@@ -32,10 +32,33 @@ function displayMessage({ name, data, sendAt, type }) {
 	messageBox.appendChild(div);
 }
 
+function modifyUserList(users) {
+	const list = document.querySelector('.list-group');
+	list.innerHTML = '';
+	users.forEach((element) => {
+		const li = document.createElement('li');
+		li.textContent = element.name;
+		list.appendChild(li);
+	});
+}
+
 document.querySelector('form').addEventListener('submit', sendMessage);
 
-socket.emit('joinRoom');
+document.getElementById('leave').addEventListener('click', () => {
+	console.log('hell');
+	socket.emit('disconnectUser');
+	window.location.href = '/';
+});
+
+socket.on('connect', () => {
+	socket.emit('joinRoom');
+});
+
 socket.on('message-recieved', (message) => {
 	displayMessage(message);
 	messageBox.scrollTop = messageBox.scrollHeight; // adjusts the scroll on the message box
+});
+
+socket.on('userList', (users) => {
+	modifyUserList(users);
 });

@@ -5,7 +5,12 @@ const ejs = require('ejs');
 const path = require('path');
 const socketio = require('socket.io');
 const http = require('http');
-const formatMessage = require('./functions/formatMessage');
+const {
+	formatMessage,
+	getActiveUser,
+	getUsersInRoom,
+	userLeave,
+} = require('./functions/formatMessage');
 
 const httpServer = http.createServer(app);
 const io = new socketio.Server(httpServer);
@@ -37,33 +42,43 @@ app.post('/chat', (req, res) => {
 const ADMIN = 'ADMIN';
 io.on('connection', (socket) => {
 	const { name, room } = socket.handshake.query; // get the name and room values from the query string set up on client
+
 	socket.on('joinRoom', () => {
 		const user = getActiveUser(socket.id, name, room);
+
 		const joinMssg = formatMessage(ADMIN, `Welcome ${user.name} to the chat room`);
+
 		socket.join(user.room);
+
 		io.to(user.room).emit('message-recieved', { ...joinMssg, type: 'broadcast' });
+
+		io.to(user.room).emit('userList', getUsersInRoom(user.room)); // we want to change the users list on all interface
+
 		socket.on('send-message', (data) => {
 			const formatedMssg = formatMessage(name, data);
+
 			socket.broadcast
 				.to(user.room)
 				.emit('message-recieved', { ...formatedMssg, type: 'broadcast' });
+
 			socket.emit('message-recieved', { ...formatedMssg, type: 'user' });
 		});
 	});
+
+	socket.on('disconnectUser', () => {
+		socket.disconnect();
+	});
+
+	socket.on('disconnect', () => {
+		const user = userLeave(name);
+		if (user) {
+			const leaveMssg = formatMessage(ADMIN, `${user.name} has disconnected`);
+			io.to(user.room).emit('message-recieved', { ...leaveMssg, typ: 'broadcast' });
+			io.to(user.room).emit('userList', getUsersInRoom(user.room));
+			socket.leave(user.room);
+		}
+	});
 });
-
-const userState = {
-	users: [],
-	setUsers: function (newUsers) {
-		this.users = newUsers;
-	},
-};
-
-const getActiveUser = (id, name, room) => {
-	user = { id, name, room };
-	userState.setUsers([...userState.users.filter((user) => user.id !== id), user]);
-	return user;
-};
 
 PORT = 3000 || process.env.PORT;
 httpServer.listen(PORT, () => {
